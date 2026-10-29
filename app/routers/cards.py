@@ -22,8 +22,7 @@ DRAW_COST = 50 # Puntos requeridos para abrir un sobre
 
 @router.get("/catalog", response_model=list[PukaCardResponse])
 def get_card_catalog(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Devuelve todas las cartas existentes en el juego (el catálogo)."""
     return db.query(PukaCard).all()
