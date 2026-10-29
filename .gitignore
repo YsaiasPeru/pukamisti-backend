@@ -1,0 +1,20 @@
+# Python virtual environments
+venv/
+.venv/
+env/
+
+# Environment variables (NEVER COMMIT DATABASE CREDENTIALS)
+.env
+.env.local
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Databases
+*.db
+*.sqlite3
+
+# Logs
+*.log
