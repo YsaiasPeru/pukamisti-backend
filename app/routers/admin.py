@@ -68,7 +68,8 @@ def delete_user(
     return None
 
 from sqlalchemy.sql import func
-from app.database.models import ChildProfile, PointsHistory, ChildChallenge
+from app.database.models import ChildProfile, PointsHistory, ChildChallenge, PukaCard, Reward
+from pydantic import BaseModel
 
 @router.get("/metrics")
 def get_admin_metrics(
@@ -87,3 +88,88 @@ def get_admin_metrics(
         "puntos_generados": puntos_totales,
         "retos_completados": retos_completados
     }
+
+class CreateCardRequest(BaseModel):
+    name: str
+    category: str = "NATURALEZA"
+    rarity: str = "COMMON"
+    description: str
+    image_url: str = None
+
+@router.post("/cards")
+def create_card(
+    payload: CreateCardRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(RoleChecker([UserRole.ADMIN.value]))
+):
+    """Crea una nueva carta en el catálogo oficial de Puka Cards."""
+    import random, string
+    code = f"PUKA-{random.randint(100, 999)}-{''.join(random.choices(string.ascii_uppercase, k=2))}"
+    new_card = PukaCard(
+        code=code,
+        name=payload.name,
+        category=payload.category,
+        rarity=payload.rarity,
+        description=payload.description,
+        image_url=payload.image_url
+    )
+    db.add(new_card)
+    db.commit()
+    db.refresh(new_card)
+    return new_card
+
+@router.delete("/cards/{card_id}")
+def delete_card(
+    card_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(RoleChecker([UserRole.ADMIN.value]))
+):
+    """Elimina una carta del catálogo."""
+    card = db.query(PukaCard).filter(PukaCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Carta no encontrada")
+    db.delete(card)
+    db.commit()
+    return {"message": "Carta eliminada con éxito"}
+
+@router.get("/redemptions")
+def get_admin_redemptions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(RoleChecker([UserRole.ADMIN.value]))
+):
+    """Obtiene el historial de canjes de recompensas realizados por los niños."""
+    records = db.query(PointsHistory, ChildProfile, User).join(
+        ChildProfile, PointsHistory.child_id == ChildProfile.id
+    ).join(
+        User, ChildProfile.user_id == User.id
+    ).filter(PointsHistory.points < 0).order_by(PointsHistory.created_at.desc()).all()
+    
+    result = []
+    for hist, child, user in records:
+        is_delivered = hist.reason.startswith("[Entregado ✅]")
+        clean_title = hist.reason.replace("[Entregado ✅] ", "").replace("Canjeó recompensa: ", "").replace("Abrió un sobre de Puka Cards", "Sobre de Puka Cards")
+        result.append({
+            "id": str(hist.id),
+            "child_name": user.name or "Aventurero Puka",
+            "access_code": child.access_code or "PUKA-CODE",
+            "reward_title": clean_title,
+            "points": abs(hist.points),
+            "created_at": hist.created_at.isoformat() if hist.created_at else None,
+            "status": "DELIVERED" if is_delivered else "PENDING"
+        })
+    return result
+
+@router.post("/redemptions/{id}/deliver")
+def mark_redemption_delivered(
+    id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(RoleChecker([UserRole.ADMIN.value]))
+):
+    """Marca un canje como entregado en el stand de la feria."""
+    hist = db.query(PointsHistory).filter(PointsHistory.id == id).first()
+    if not hist:
+        raise HTTPException(status_code=404, detail="Registro de canje no encontrado")
+    if not hist.reason.startswith("[Entregado ✅] "):
+        hist.reason = f"[Entregado ✅] {hist.reason}"
+        db.commit()
+    return {"message": "Canje marcado como entregado en stand", "status": "DELIVERED"}
