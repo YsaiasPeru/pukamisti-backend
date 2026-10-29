@@ -5,6 +5,8 @@ psycopg[binary]
 python-dotenv
 pydantic
 pydantic-settings
+pydantic[email]
+email-validator
 python-jose[cryptography]
 passlib[bcrypt]
 bcrypt
