@@ -1,9 +1,11 @@
 import os
 from pydantic_settings import BaseSettings
 
+DEFAULT_NEON_DB = "postgresql://neondb_owner:npg_0mHtwgxsThR3@ep-steep-sunset-aesz7s5q-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require"
+
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Puka Miski API"
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+    DATABASE_URL: str = os.getenv("DATABASE_URL") or DEFAULT_NEON_DB
     SECRET_KEY: str = os.getenv("SECRET_KEY", "super-secret-puka-miski-key-change-in-prod")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7 # 7 days
