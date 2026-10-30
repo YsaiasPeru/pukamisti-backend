@@ -68,7 +68,7 @@ def delete_user(
     return None
 
 from sqlalchemy.sql import func
-from app.database.models import ChildProfile, PointsHistory, ChildChallenge, PukaCard, Reward
+from app.database.models import ChildProfile, PointsHistory, ChildChallenge, PukaCard, Reward, SystemSetting
 from pydantic import BaseModel
 
 @router.get("/metrics")
@@ -173,3 +173,53 @@ def mark_redemption_delivered(
         hist.reason = f"[Entregado ✅] {hist.reason}"
         db.commit()
     return {"message": "Canje marcado como entregado en stand", "status": "DELIVERED"}
+
+class PaymentSettingsPayload(BaseModel):
+    yape_phone: str
+    yape_holder: str = "Proyecto Pukamisky"
+    plin_phone: str
+    plin_holder: str = "Proyecto Pukamisky"
+
+@router.get("/settings/payments")
+def get_payment_settings(db: Session = Depends(get_db)):
+    """Obtiene los números y titulares configurados para Yape y Plin (público para Impacto Social)."""
+    settings_records = db.query(SystemSetting).filter(
+        SystemSetting.key.in_(["yape_phone", "yape_holder", "plin_phone", "plin_holder"])
+    ).all()
+    data = {s.key: s.value for s in settings_records}
+    return {
+        "yape_phone": data.get("yape_phone", "987 654 321"),
+        "yape_holder": data.get("yape_holder", "Proyecto Pukamisky"),
+        "plin_phone": data.get("plin_phone", "987 654 321"),
+        "plin_holder": data.get("plin_holder", "Proyecto Pukamisky"),
+    }
+
+@router.put("/settings/payments")
+def update_payment_settings(
+    payload: PaymentSettingsPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(RoleChecker([UserRole.ADMIN.value]))
+):
+    """Actualiza los números y titulares de Yape y Plin. Solo Administradores."""
+    updates = {
+        "yape_phone": (payload.yape_phone.strip(), "Número de teléfono para donaciones vía Yape"),
+        "yape_holder": (payload.yape_holder.strip(), "Nombre del titular para Yape"),
+        "plin_phone": (payload.plin_phone.strip(), "Número de teléfono para donaciones vía Plin"),
+        "plin_holder": (payload.plin_holder.strip(), "Nombre del titular para Plin"),
+    }
+    for key, (val, desc) in updates.items():
+        setting = db.query(SystemSetting).filter(SystemSetting.key == key).first()
+        if setting:
+            setting.value = val
+        else:
+            db.add(SystemSetting(key=key, value=val, description=desc))
+    db.commit()
+    return {
+        "message": "Configuración de Yape y Plin actualizada con éxito",
+        "settings": {
+            "yape_phone": payload.yape_phone.strip(),
+            "yape_holder": payload.yape_holder.strip(),
+            "plin_phone": payload.plin_phone.strip(),
+            "plin_holder": payload.plin_holder.strip(),
+        }
+    }

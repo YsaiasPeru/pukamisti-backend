@@ -136,3 +136,10 @@ class Reward(Base):
     stock = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class SystemSetting(Base):
+    __tablename__ = "system_settings"
+    key = Column(String(100), primary_key=True, index=True)
+    value = Column(Text, nullable=False)
+    description = Column(String(255), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
